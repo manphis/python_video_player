@@ -4,7 +4,7 @@ rate = 0.00875
 timestampList = []
 
 def getGyro(msb, lsb):
-	value = msb << 8 | lsb
+	value = (msb & 0xFF) << 8 | lsb
 	if value > 32767:
 		value = (65536 - value) * (-1)
 	gyro = value * rate
@@ -13,7 +13,7 @@ def getGyro(msb, lsb):
 
 
 def getAcc(msb, lsb):
-	value = msb << 8 | lsb
+	value = (msb & 0xFF) << 8 | lsb
 	if value > 32767:
 		value = (65536 - value) * (-1)
 
@@ -65,8 +65,8 @@ def createIMUAndTSFile(filePath):
 	while byte:
 		# if byte[0]=='T' and byte[1]=='I' and byte[2]=='M' and byte[3]=='E':
 		if chr(byte[0])=='T' and chr(byte[1])=='I' and chr(byte[2])=='M' and chr(byte[3])=='E':
-			tv_sec = byte[7] << 24 | byte[6] << 16 | byte[5] << 8 | byte[4]
-			tv_usec = byte[11] << 24 | byte[10] << 16 | byte[9] << 8 | byte[8]
+			tv_sec = (byte[7] & 0xFF) << 24 | (byte[6] & 0xFF) << 16 | (byte[5] & 0xFF) << 8 | (byte[4] & 0xFF)
+			tv_usec = (byte[11] & 0xFF) << 24 | (byte[10] & 0xFF) << 16 | (byte[9] & 0xFF) << 8 | (byte[8] & 0xFF)
 
 			timestamp = int((tv_sec * samplerate) % (256**4) + (tv_usec * (samplerate * 1.0e-6)))
 
@@ -154,5 +154,5 @@ def createIMUAndTSFile(filePath):
 		print("parsing not match !!! file lines = ", file_lines, ", total data count = ", str(total_imu_count+total_ts_count))
 
 
-readTimestamp("EASON_q8h_Area_1_1570080842570.ts")
-createIMUAndTSFile("EASON_q8h_Area_1_1570080842570.txt")
+readTimestamp("EASON_q8h_Area_2_1570081276793.ts")
+createIMUAndTSFile("EASON_q8h_Area_2_1570081276793.txt")
