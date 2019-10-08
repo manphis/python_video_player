@@ -1,7 +1,13 @@
 import os.path
+import glob
+import cv2
+from os import listdir
+from argparse import ArgumentParser
 
 rate = 0.00875
 timestampList = []
+MAX_INDEX = 16
+IMAGE_FOLDER = "decode"
 
 def getGyro(msb, lsb):
 	value = (msb & 0xFF) << 8 | lsb
@@ -23,9 +29,6 @@ def getAcc(msb, lsb):
 
 
 def readTimestamp(filePath):
-	if not os.path.isfile(filePath):
-		return
-
 	f = open(filePath)
 	timestampList[:] = []
 	line = f.readline()
@@ -56,7 +59,8 @@ def createIMUAndTSFile(filePath):
 	file_lines = (int)(statinfo.st_size/18);
 	print("file lines = ", file_lines)
 
-	output_file = open("output.csv","w+")
+	output_str = filePath.replace(".txt", "_imu.csv")
+	output_file = open(output_str, "w+")
 
 	print("no. of video timestamp =", len(timestampList))
 
@@ -69,9 +73,6 @@ def createIMUAndTSFile(filePath):
 			tv_usec = (byte[11] & 0xFF) << 24 | (byte[10] & 0xFF) << 16 | (byte[9] & 0xFF) << 8 | (byte[8] & 0xFF)
 
 			timestamp = int((tv_sec * samplerate) % (256**4) + (tv_usec * (samplerate * 1.0e-6)))
-
-			print('timestamp =', timestamp)
-		# timestamp_count += 1
 
 			if start_rtp_timestamp == 0:
 				start_rtp_timestamp = int((tv_sec * samplerate) % (256**4) + (tv_usec * (samplerate * 1.0e-6)));
@@ -149,10 +150,84 @@ def createIMUAndTSFile(filePath):
 
 	print("total imu count = ", str(total_imu_count),
 		" total ts count = ", str(total_ts_count),
-		" total data count = ", str(total_imu_count + total_ts_count), "\n\n")
+		" total data count = ", str(total_imu_count + total_ts_count))
 	if (total_imu_count+total_ts_count) != file_lines:
 		print("parsing not match !!! file lines = ", file_lines, ", total data count = ", str(total_imu_count+total_ts_count))
 
 
-readTimestamp("EASON_q8h_Area_2_1570081276793.ts")
-createIMUAndTSFile("EASON_q8h_Area_2_1570081276793.txt")
+def batchParse(rootFolder):
+	for folderIndex in range(1, MAX_INDEX+2):
+		if folderIndex == MAX_INDEX + 1:
+			areaFolder = rootFolder + "/Area_free"
+		else:
+			areaFolder = rootFolder + "/Area_" + str(folderIndex)
+
+		if not os.path.exists(areaFolder):
+			continue
+
+		videoFile = getVideoFile(areaFolder)
+		print(videoFile)
+		if videoFile == None:
+			print("no q8h mp4 file in", areaFolder)
+			continue
+
+		timestampFilePath = areaFolder + "/" + videoFile.replace(".mp4", ".ts")
+		if not os.path.isfile(timestampFilePath):
+			continue
+
+		readTimestamp(timestampFilePath);
+
+		imuFilePath = areaFolder + "/" + videoFile.replace(".mp4", ".txt")
+		if not os.path.isfile(imuFilePath):
+			continue
+
+		createIMUAndTSFile(imuFilePath)
+
+		if not os.path.exists(areaFolder + "/" + IMAGE_FOLDER):
+			os.mkdir(areaFolder + "/" + IMAGE_FOLDER)
+		extractAndSaveMp4(areaFolder, areaFolder + "/" + videoFile)
+
+		print("\n\n")
+
+
+def getVideoFile(folder):
+	fileLists = listdir(folder)
+	mp4File = []
+	for f in fileLists:
+		if ("q8h" in f) and f.endswith(".mp4"):
+			mp4File.append(f)
+	if mp4File == []:
+		return None
+
+	return max(mp4File)
+
+
+def extractAndSaveMp4(rootFolder, file):
+	print("extractAndSaveMp4", file)
+	vidcap = cv2.VideoCapture(file)
+	success, image = vidcap.read()
+	count = 0
+	success = True
+	while success:
+		frame_name = "frame_%d.jpg" % timestampList[count]
+		frame_full_name = rootFolder + "/" + IMAGE_FOLDER + "/" + frame_name
+		cv2.imwrite(frame_full_name, image)     # save frame as JPEG file
+		success,image = vidcap.read()
+		count += 1
+	print("decode %d images" % count)
+
+
+if __name__ == '__main__':
+	parser = ArgumentParser()
+	parser.add_argument("-i", "--input", help="imu file name", dest="inputFile", required=True)
+
+	args = parser.parse_args()
+
+	if os.path.isfile(args.inputFile):
+		print("isfile")
+	elif os.path.isdir(args.inputFile):
+		folderIndex = 1
+		batchParse(args.inputFile)
+	else:
+		print("no such file")
+
